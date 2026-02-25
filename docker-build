@@ -4,5 +4,6 @@
 
 prefix=kdave
 image=$(basename `pwd` | tr '[A-Z]' '[a-z]')
+image=os-tw-base
 
 docker build -t "$prefix/$image" .

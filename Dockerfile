@@ -3,7 +3,8 @@ FROM opensuse/tumbleweed
 WORKDIR /tmp
 
 # Base
-RUN zypper install -y tar gzip sed awk findutils grep coreutils e2fsprogs \
+RUN zypper install -y --no-recommends pam-extra
+RUN zypper install -y --no-recommends tar gzip sed awk findutils grep coreutils e2fsprogs \
 	    xfsprogs btrfsprogs fio duperemove keyutils lvm xfsdump quota \
 	    perl libcap-progs device-mapper bind-utils \
 	    util-linux util-linux-systemd udev acl attr xz wget \
