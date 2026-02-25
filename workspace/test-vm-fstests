@@ -1,0 +1,46 @@
+#!/bin/bash
+# Start fstests inside the VM.
+
+if ! [ -d /mnt/workspace ]; then
+	echo "ERROR: unrecognized environment, run inside docker or VM"
+	exit 1
+fi
+
+# Enable verbose serial console
+echo 9 > /proc/sysrq-trigger
+
+modprobe btrfs
+
+mkdir -p /mnt/workspace/test
+mkdir -p /mnt/workspace/scratch
+
+echo "FSTESTS: initialize"
+
+cd /mnt/workspace/xfstests
+
+config="\
+TEST_DEV=/dev/vda
+TEST_DIR=/mnt/workspace/test
+SCRATCH_DEV_POOL='/dev/vdb /dev/vdc /dev/vdd /dev/vde /dev/vdf /dev/vdg /dev/vdh /dev/vdi'
+SCRATCH_MNT=/mnt/workspace/scratch
+FSTYP=btrfs
+LOGWRITES_DEV=/dev/vdi
+MKFS_OPTIONS='-K -f'
+MOUNT_OPTIONS=''
+"
+
+echo "$config" > local.config
+echo "FSTESTS: local.config"
+cat local.config
+
+(
+	source ./local.config
+	# Mandatory filesystem on the test device
+	echo mkfs.$FSTYP -f $MKFS_OPTIONS "$TEST_DEV"
+	mkfs.$FSTYP -f $MKFS_OPTIONS "$TEST_DEV"
+	exit 0
+)
+
+echo "FSTESTS: start tests"
+# Reset SIGPIPE handling to default in case it's blocked
+env --default-signal=PIPE ./check -b -T -E EXCLUDE btrfs/011

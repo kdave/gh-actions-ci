@@ -1,0 +1,5 @@
+#!/bin/sh
+# Debugging script for GH actions environment
+
+echo WORKSPACE: $GITHUB_WORKSPACE
+set | grep GITHUB

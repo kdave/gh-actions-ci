@@ -1,0 +1,19 @@
+#!/bin/bash
+# Run GH worker, service listening for actions work. Run from inside docker.
+
+if ! [ -d /mnt/workspace ]; then
+	echo "ERROR: unrecognized environment, run inside docker"
+	exit 1
+fi
+
+cd /tmp
+
+vng --version
+
+if ! [ -f "/mnt/workspace/runner/run.sh" ]; then
+	echo "ERROR: no GH runner script found"
+	exit 1
+fi
+
+cd /mnt/workspace/runner/
+sudo -u fsgqa ./run.sh

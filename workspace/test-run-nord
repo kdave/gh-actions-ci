@@ -1,0 +1,72 @@
+#!/bin/bash
+
+if ! [ -d /mnt/workspace ]; then
+	echo "ERROR: unrecognized environment, run inside docker"
+	exit 1
+fi
+
+cd /tmp
+
+# ccache
+PATH="/usr/lib64/ccache:$PATH"
+mkdir -p /mnt/workspace/ccache
+export CCACHE_DIR=/mnt/workspace/ccache
+ccache -s
+
+if ! [ -z "$GITHUB_WORKSPACE" ]; then
+	#cd /mnt/workspace/runner/_work/btrfs-devel/btrfs-devel
+	echo "TESTRUN: running inside GH $GITHUB_WORKSPACE"
+	cd "$GITHUB_WORKSPACE"
+fi
+
+if [ -e .git ]; then
+	# Probably run from GH runner
+	echo "TESTRUN: called inside .git"
+	git remote -v
+	gitdir="`pwd`"
+else
+	# For local testing only
+	echo "TESTRUN: found linux git for VM"
+	if ! [ -e "/mnt/workspace/linux-vm-nord/.git" ]; then
+		echo "ERROR: linux.git does not look like a git tree"
+		exit 1
+	fi
+	gitdir="/mnt/workspace/linux-vm-nord/"
+	cd /mnt/workspace/linux-vm-nord/
+fi
+
+cp /mnt/workspace/vm-gh/.config .
+yes '' | make oldconfig
+make -j $((`nproc`>16?16:`nproc`))
+
+echo "TESTRUN: run fstests in VM (pwd=`pwd`)"
+: \
+	-- 'lsblk; lscpu; free -m; date >> /mnt/workspace/date; /mnt/workspace/test-vm-fstests'
+
+# TODO: source
+for oldqemu in $(pgrep -f fstests/gh0); do
+	echo "TESTRUN: found old qemu pid $oldqemu"
+	kill -9 "$oldqemu"
+done
+
+cd /mnt/workspace/vm-gh
+
+(
+ source ./runme-config
+ echo nr=$nr gitdir=$gitdir cpu=$cpu mem=$mem serial=$serial
+)
+
+echo "TESTRUN: update kernel image from git"
+./update-kernel "$gitdir" >&/dev/null
+
+# TODO: Updatovat zvenku nebo z workspacu
+#./update-init.sh
+# TODO: update pred behem nebo behem ze site?
+#./update-fstests.sh
+# TODO: tohle ne, musi bejt wrap
+#./runme autorun=lsblk
+# TODO: co ma vubec poustet, implicitne fstests a zbytek dava na prikazovou radku
+#./z-start-ci runtest=btrfs/004
+./z-start-ci
+
+# TODO: cleanup after run

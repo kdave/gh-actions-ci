@@ -1,0 +1,10 @@
+#!/bin/bash
+# Generic GH runner
+
+if ! [ -d /mnt/workspace/runner ]; then
+	echo "ERROR: not in the right environment"
+	exit 1
+fi
+
+cd /mnt/workspace/runner
+./run.sh

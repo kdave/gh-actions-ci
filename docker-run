@@ -1,0 +1,50 @@
+#!/bin/bash
+# Run the container
+# $0 [docker arguments] [-- command and arguments]
+
+prefix=kdave
+image=$(basename `pwd` | tr '[A-Z]' '[a-z]')
+image=os-tw-base
+
+mountlocaldevs=false
+# For runme/nord must be set for loop devices
+mountlocaldevs=true
+
+# Container for future reference, NRed
+name=fstests0
+
+declare -a ARGS
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--) shift; break;;
+		*) ARGS+=("$1"); shift;;
+	esac
+done
+
+echo "DOCKER ARGS: ${ARGS[@]}"
+echo "DOCKER RUN : $@"
+
+# Running inside non-interactive terminal would fail
+tty=
+if [ -t 1 ]; then
+	tty=-it
+fi
+
+if $mountlocaldevs; then
+	echo "DOCKER: mount local /dev"
+	localdevs="--mount type=bind,source=/dev,target=/dev"
+fi
+
+# Device mapper devices are not visible inside the environment if the /dev mount
+# is the default one (tmpfs instead of devtmpfs)
+# Mounts and loop device manipulation is required
+echo Not used: \
+	--name "$name"							\
+
+#  no tty for now
+tty=
+docker run								\
+	$tty								\
+	$localdevs							\
+	--mount type=bind,source=`pwd`/workspace,target=/mnt/workspace 	\
+	--privileged "${ARGS[@]}" "$prefix/$image" "$@"

@@ -1,0 +1,14 @@
+#!/bin/bash
+# Quick script for docker to test virtme and installed kernel
+
+cd /mnt/workspace
+
+lastkernel=$(ls /boot | grep ^vmlinuz | tail -n1 | sed -e 's/vmlinuz-//')
+if ! [ -f "/boot/vmlinuz-$lastkernel" ]; then
+	echo "Skip virtme test, no kernel image found at /boot"
+	exit 0
+fi
+
+echo "Found kernel image $lastkernel"
+vng --version
+vng --run "$lastkernel" -- uname -r

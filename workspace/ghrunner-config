@@ -1,0 +1,8 @@
+#!/bin/bash
+# Initial configuration of self-hosted runner service. Run this from docker
+# (recommended as it will be the same environment).
+
+cd runner
+# Note, the token is not valid, use the one from github self-hosted setup page
+# TODO: pick runner name from config or set manually
+./config.sh --url https://github.com/kdave/btrfs-devel --token AANGKNHXXXXXXXXXXXXXXXXXXXXXX --name runner0

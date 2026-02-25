@@ -1,0 +1,26 @@
+#!/bin/sh
+
+nr=0
+guestname=fstests/gh${nr}
+gitdir=/mnt/workspace/linux-vm-nord/
+
+cpu=2
+mem=2G
+
+drives=9
+cache=writeback
+blkif=virtio
+cleandisk=true
+drivefallocate=true
+drivesize=12G
+
+telnetport=$((9900+${nr}))
+sshport=$((2200+${nr}))
+serial=stdio
+serial=file:serial${nr}-$(date +%F_%T).log
+
+cleandisk=true
+
+export fallocate
+fallocate=true
+drivefallocate=true

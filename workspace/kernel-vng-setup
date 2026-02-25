@@ -1,0 +1,30 @@
+#!/bin/bash
+# Set up linux kernel for virtme. Run from your linux.git you intend to run as VM.
+#
+# - .config must not exist, otherwise it will be ignored
+# - custom additional configs can be added
+
+here=`pwd`
+home=$(readlink -f "$0")
+home=$(dirname "$home")
+
+cd "$1" || { echo "ERROR: no dir"; exit 1; }
+
+# ccache
+PATH="/usr/lib64/ccache:$PATH"
+mkdir -p /mnt/workspace/ccache
+export CCACHE_DIR=/mnt/workspace/ccache
+ccache -s
+
+frag=
+if [ -f "$home/kconfig.btrfs" ]; then
+	echo "KCONFIG: add kconfig.btrfs"
+	frag="$frag --config $home/kconfig.btrfs"
+fi
+if [ -f "$home/kconfig.fstests" ]; then
+	echo "KCONFIG: add kconfig.fstests"
+	frag="$frag --config $home/kconfig.fstests"
+fi
+
+vng --verbose --kconfig $frag
+vng --verbose --build

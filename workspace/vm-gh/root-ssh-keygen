@@ -1,0 +1,22 @@
+#!/bin/sh
+
+if ! [ -f vm-key ]; then
+	echo "No key found, generate new"
+	ssh-keygen -f vm-key -P ''
+fi
+
+root=`pwd`/mnt
+
+mounted=false
+if ! findmnt "$root"; then
+	./root-mount || { echo "ERROR: mount"; exit 1; }
+	mounted=true
+fi
+
+echo "Add ssh key to VM root"
+sudo mkdir -p "$root/root/.ssh"
+sudo tee -a < vm-key.pub "$root/root/.ssh/authorized_keys"
+fsync "$root"
+sleep 2
+
+if $mounted; then ./root-umount; fi

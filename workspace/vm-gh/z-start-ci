@@ -1,0 +1,23 @@
+#!/bin/sh
+
+./root-umount
+
+source ./runme-config
+
+./runme net "$@" &
+
+sleep 5
+
+until ./root-ssh exit 0; do
+	tail serial${nr}.log
+	date
+	sleep 1
+done
+echo "Qemu pid: " $(pgrep "$guestname")
+./root-ssh /run-fstests.sh
+./root-ssh poweroff -f
+
+wait
+
+echo "Kill $guestname"
+sudo pkill -f $guestname

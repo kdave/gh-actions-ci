@@ -1,0 +1,142 @@
+#!/bin/sh
+
+monitor='-monitor telnet:127.0.0.1:8801,server,nowait'
+
+ownconfig=false
+fallocate=true
+platform=`uname -i`
+machine=
+image=
+model=
+console=
+serial=telnet
+
+# append to kernel command line
+APPEND=no_console_suspend
+for arg in "$@"; do
+	if echo "$arg" | grep -q fstests; then
+		APPEND="$APPEND $arg"
+	elif echo "$arg" | grep -q runtest; then
+		APPEND="$APPEND $arg"
+	elif echo "$arg" | grep -q keepme; then
+		APPEND="$APPEND keepme"
+	elif echo "$arg" | grep -q autorun; then
+		APPEND="$APPEND $arg"
+	elif echo "$arg" | grep -q autoparam; then
+		APPEND="$APPEND $arg"
+	elif echo "$arg" | grep -q net; then
+		APPEND="$APPEND $arg"
+	fi
+done
+#APPEND=${1:+fstests=$1}
+#APPEND=${1}
+
+if $ownconfig; then
+	# standalone, no inclusion of runme-config
+	cpu=4
+	mem=2G
+	drives=8
+	telnetport=9901
+	sshport=2201
+	cache=writeback
+	blkif=virtio
+	cleandisk=false
+	drivefallocate=true
+	drivesize=12G
+else
+	echo "RUNME: import config"
+	set -e
+	source ./runme-config
+
+fi
+
+# validate and transfer config values
+if [ "$drivefallocate" = false ]; then
+	fallocate=false
+fi
+if [ -z "$drivesize" ]; then
+	drivesize=12G
+fi
+
+case "$platform" in
+	x86_64)  image=bzImage; console=ttyS0;;
+	aarch64) image=Image; console=ttyAMA0; machine=virt;;
+	i386) image=bzImage; console=ttyS0;;
+	*) echo "ERROR: unsupported platform $platform"; exit 1;;
+esac
+
+if [ -z "$serial" -o "$serial" == 'telnet' ]; then
+	serial="telnet:localhost:$telnetport,server,nowait,nodelay"
+else
+	echo "RUNME: custom serial output: $serial"
+fi
+
+function reset_drives() {
+	bn=$(readlink -f disk1)
+	bn=$(dirname "$bn")
+	echo "RUNME: reset drive images: drives=$drives fallocate=$fallocate path=$bn"
+	for i in `seq $drives`; do
+		p=`readlink -f disk$i`
+		# skip initializing block devices
+		if [ -b "$p" ]; then
+			echo "Skip initialization of disk${i}: $p"
+			continue
+		fi
+		touch "$p"
+		if $cleandisk; then
+			truncate -s 0 "$p"
+		fi
+		# on btrfs we need +Cm, otherwise don't want to fail
+		if [ $(stat -f -c %T "$p") = 'btrfs' ]; then
+			chattr +Cm "$p" || true
+		fi
+		if $fallocate; then
+			fallocate -l "$drivesize" "$p"
+		else
+			truncate -s "$drivesize" "$p"
+		fi
+	done
+}
+
+function list_drives() {
+	local d=
+
+	for i in `seq $drives`; do
+		d="$d -drive file=disk${i},if=$blkif,index=${i},media=disk,cache=$cache,format=raw,discard=on"
+	done
+	echo -n "$d"
+}
+
+reset_drives
+
+mkdir -p share
+
+: \
+
+echo "RUNME: append: $APPEND"
+echo "RUNME: start qemu $platform: name=$guestname cpu=$cpu/$model mem=$mem cache=$cache blkif=$blkif ssh=$sshport"
+qemu-system-$platform							\
+	${guestname:+-name "$guestname"}				\
+	${vnc:+-vnc "$vnc"}						\
+	-enable-kvm							\
+	-display none							\
+	${machine:+-machine "$machine"}					\
+	${model:+-cpu "$model"}						\
+	-m "$mem"							\
+	-smp "$cpu"							\
+	-boot c								\
+	-no-reboot							\
+	-device virtio-rng-pci						\
+	-device e1000,netdev=net0					\
+	-netdev user,id=net0,hostfwd=tcp::${sshport}-:22		\
+	-device virtio-scsi-pci,id=scsi					\
+	-drive file=root,id=root-img,if=none,format=raw,cache=none	\
+	-device scsi-hd,drive=root-img					\
+	-virtfs local,path=`pwd`/share,security_model=none,mount_tag=virtshare	\
+	-kernel "$image"						\
+	-append "root=/dev/sda ro earlyprintk console=tty0 console=$console,115200 init=/init.sh $APPEND"	\
+	-serial "$serial"						\
+	$monitor \
+	`list_drives`							\
+	$QEMU_MINI_EXTRA
+

@@ -1,0 +1,7 @@
+/workspace/disk*
+/workspace/runner/
+/workspace/xfstests
+/workspace/btrfs-progs
+/workspace/linux-vm
+/workspace/linux-vm-nord
+/workspace/ccache

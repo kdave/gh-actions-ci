@@ -1,0 +1,157 @@
+#!/bin/bash
+# Entry script to set up fstests and run them via virtme
+#
+# Run:
+# - build btrfs-progs
+# - build fstests
+# - set up disks
+# - run virtme/qemu
+#
+# Does not:
+# - build linux kernel
+
+if ! [ -d /mnt/workspace ]; then
+	echo "ERROR: unrecognized environment, run inside docker"
+	exit 1
+fi
+
+cd /tmp
+
+vng --version
+
+if ! [ -f "/mnt/workspace/test-vm-fstests" ]; then
+	echo "ERROR: no fstests runner script found"
+	exit 1
+fi
+
+# ccache
+PATH="/usr/lib64/ccache:$PATH"
+mkdir -p /mnt/workspace/ccache
+export CCACHE_DIR=/mnt/workspace/ccache
+ccache -s
+
+# Set up btrfs-progs
+if [ -d /mnt/workspace/btrfs-progs ]; then
+	echo "TESTRUN: found btrfs-progs in workspace"
+elif [ -f /mnt/workspace/btrfs-progs.tgz ]; then
+	echo "TESTRUN: found btrfs-progs.tgz, using it"
+	(
+		cd /mnt/workspace
+		tar xf btrfs-progs.tgz
+	)
+	echo "TESTRUN: btrfs-progs unpacked"
+fi
+
+# Set up fstests
+if [ -d /mnt/workspace/xfstests ]; then
+	echo "TESTRUN: found xfstests in workspace"
+elif [ -f /mnt/workspace/xfstests.tgz ]; then
+	echo "TESTRUN: found xfstests.tgz, using it"
+	(
+		cd /mnt/workspace
+		tar xf xfstests.tgz
+	)
+	echo "TESTRUN: xfstests unpacked"
+fi
+
+(
+	echo "TESTRUN: build btrfs-progs"
+	cd /mnt/workspace/btrfs-progs
+	if ! [ -f configure ]; then
+		./autogen.sh
+		./configure --disable-documentation --disable-python --enable-experimental
+	fi
+	make -j 4
+)
+
+(
+	echo "TESTRUN: build fstests"
+	cd /mnt/workspace/xfstests
+	if ! [ -f configure ]; then
+		autoreconf -vfi
+		./configure
+	fi
+	make -j 4
+)
+
+PATH="/mnt/workspace/btrfs-progs:$PATH"
+
+type -p btrfs
+btrfs --version
+
+run=
+if [ -d "/mnt/workspace/linux-vm" ]; then
+	echo "TESTRUN: found linux git for VM"
+	if ! [ -e "/mnt/workspace/linux-vm/.git" ]; then
+		echo "ERROR: linux.git does not look like a git tree"
+		exit 1
+	fi
+	cd /mnt/workspace/linux-vm/
+	run=""
+else
+	echo "TESTRUN: found local kernel $lastkernel"
+	lastkernel=$(ls /boot | grep ^vmlinuz | tail -n1 | sed -e 's/vmlinuz-//')
+	run="--run $lastkernel"
+fi
+#echo "TESTRUN: quick virtme test"
+#vng $run -- uname -r
+
+echo "TESTRUN: set up fstests for run"
+
+disks=
+for i in {1..9}; do
+	set -x
+	diski="/mnt/workspace/disk$i"
+	fullpath=$(readlink -f "$diski")
+	echo "TESTRUN: disk$i full path $fullpath"
+	ls -l /mnt/workspace/disk$i
+	if [ -b "$fullpath" ]; then
+		echo "TESTRUN: disk$i is a block device $fullpath"
+	elif [ -f "$fullpath" ]; then
+		echo "TESTRUN: disk$i reused as a file $diski"
+		truncate -s 0 "$diski" || exit 1
+		chattr +C "$diski" 2>/dev/null
+		chattr +m "$diski" 2>/dev/null
+		fallocate -l 12G "$diski"
+	else
+		echo "ERROR: disk$i status unknown"
+		exit 1
+	fi
+	# virtme disks
+	if false; then
+		disks="$disks --disk $diski"
+	else
+		# Own disks
+		# -drive file=$diski,if=$blkif,index=${i},media=disk,cache=$cache,format=raw,discard=on
+		blkif=virtio
+		cache=writeback
+		disks="$disks --qemu-opts=-drive --qemu-opts=file=$diski,if=$blkif,index=${i},media=disk,cache=$cache,format=raw,discard=on"
+	fi
+done
+
+: \
+	--verbose \
+	--ssh \
+	-- 'lsblk; lscpu; free -m; date >> /mnt/workspace/date; /mnt/workspace/test-vm-fstests'
+
+
+for oldqemu in $(pgrep -f fstests/vm0); do
+	echo "TESTRUN: found old qemu pid $oldqemu"
+	kill -9 "$oldqemu"
+done
+
+# Notes:
+# - --ssh and --console canont be run at the same time
+# - --console must run default command if you want to use --console-client as well
+# - entering the VM environment must be done from the same running docker container
+
+echo "TESTRUN: run fstests in VM (pwd=`pwd`)"
+vng --name=fstests/vm0 \
+	$run \
+	--qemu-opts=-device --qemu-opts=virtio-rng-pci \
+	--console \
+	--cpus=4 --memory=4096 \
+	--user=root --empty-passwords --network=user \
+	--rwdir /mnt/workspace=/mnt/workspace \
+	$disks \
+

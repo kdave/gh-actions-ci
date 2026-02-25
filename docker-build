@@ -1,0 +1,8 @@
+#!/bin/sh
+# Run from the directory with Dockerfile, directory name should match the image
+# name
+
+prefix=kdave
+image=$(basename `pwd` | tr '[A-Z]' '[a-z]')
+
+docker build -t "$prefix/$image" .

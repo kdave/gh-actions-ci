@@ -1,0 +1,67 @@
+#!/bin/sh
+
+# install modules and kernel image from source directory
+#
+# usage: $0 [dir]
+
+function die(){ echo "ERROR: $@"; exit 1; }
+here=`pwd`
+
+if [ -z "$1" ]; then
+	if [ -f 'runme-config' ]; then
+		source ./runme-config
+		echo "Update from config path: $gitdir"
+		dir=$gitdir
+	else
+		die "no path given and config not found"
+	fi
+else
+	dir="$1"
+	echo "Update from path: $dir"
+fi
+
+cd "$dir" || die 'cannot go to git'
+
+br=`git branch | grep '^*'`
+sha=`git --no-pager log -1 --format='%h'`
+subj=`git --no-pager log -1 --format='%s'`
+echo "git: ($br) $sha \"$subj\""
+
+cp arch/x86/boot/bzImage "$here" || die "no bzImage"
+rm -rf "$here/mods-tmp"
+mkdir -p "$here/mods-tmp/usr/lib/modules"
+# Workaround: make the link so depmod works but it looks like pre-usrmerge
+ln -sf "usr/lib" "$here/mods-tmp/lib"
+make modules_install INSTALL_MOD_PATH="$here/mods-tmp" || die "no modules"
+
+cd "$here" || die 'cannot go back'
+
+rm -rf "mods-old"
+#if [ -d 'mods' ]; then mv mods mods-old; fi
+if [ -d 'mods' ]; then rm -rf mods; fi
+mv mods-tmp mods || die "cannot finalize mods"
+
+modspath=$(cd mods && ls -d1 lib/modules/*)
+[ -z "$modspath" ] && die "cannot find module path inside mods/"
+
+# Workaround: don't delete the new lib
+#rm -- "$here/mods-tmp/lib"
+
+echo "$modspath"
+
+echo "=== rsync to root path $modspath"
+./root-mount || die 'cannot mount'
+rm -vrf "mnt/$modspath" || sudo rm -vrf -- "mnt/$modspath"
+# usrmerge
+# Workaround: lib is there but it's not usrmerge, so do pre-usrmerge
+# if [ -h mnt/lib ]; then
+if false; then
+	echo "This is with usrmerge, copy to /usr/lib/modules"
+	sudo rsync -vaxAXPH mods/. mnt/usr || die "cannot rsync"
+else
+	echo "This is pre-usrmerge, copy to /lib/modules"
+	sudo rsync -vaxAXPH mods/. mnt/ || die "cannot rsync"
+fi
+./root-umount
+
+echo "git: ($br) $sha \"$subj\""
