@@ -5,3 +5,10 @@
 /workspace/linux-vm
 /workspace/linux-vm-nord
 /workspace/ccache
+/workspace/vm-gh/disk*
+/workspace/vm-gh/root
+/workspace/vm-gh/mods/
+/workspace/vm-gh/mnt/
+/workspace/vm-gh/*.tar.gz
+/workspace/vm-gh/serial*.log
+/workspace/vm-gh/bzImage
