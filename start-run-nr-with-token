@@ -24,12 +24,17 @@ LCCACHEABS=$(readlink -f "$LCCACHE")
 # ./config.sh --url "$URL" --token "$token" --name "$NAME" --unattended
 #echo ./config.sh --url "URL" --token "token" --name "$NAME" --unattended
 
-if ! [ -f "runner-pat" ]; then
-	echo "ERROR: cannot find the PAT file 'runner-pat' to generate tokens"
-	exit 1
+# No token in env
+if [ -z "$GITHUB_PAT" ]; then
+	if ! [ -f "runner-pat" ]; then
+		echo "ERROR: cannot find the PAT file 'runner-pat' to generate tokens"
+		exit 1
+	fi
+	GITHUB_PAT=$(cat runner-pat)
+else
+	echo "Using GITHUB_PAT for generating tokens"
 fi
 
-GITHUB_PAT=$(cat runner-pat)
 TOKEN=$(
 curl    -sS \
 	-X POST \
