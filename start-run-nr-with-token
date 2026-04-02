@@ -1,0 +1,56 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+	echo "ERROR: give me worker number"
+	exit 1
+fi
+
+nr="$1"
+
+NAME="runner$nr"
+OWNER="btrfs"
+REPO="linux"
+RURL="https://github.com/$OWNER/$REPO"
+IMAGE="ghcr.io/actions/actions-runner:latest"
+RHOME="/home/runner"
+RWORK="$RHOME/_work"
+LWORK="work-$NAME"
+LWORKABS=$(readlink -f "$LWORK")
+RCCACHE="/home/runner/_ccache"
+LCCACHE="work-ccache"
+LCCACHEABS=$(readlink -f "$LCCACHE")
+
+# Create token: https://github.com/btrfs/linux/settings/actions/runners/new
+# ./config.sh --url "$URL" --token "$token" --name "$NAME" --unattended
+#echo ./config.sh --url "URL" --token "token" --name "$NAME" --unattended
+
+if ! [ -f "runner-pat" ]; then
+	echo "ERROR: cannot find the PAT file 'runner-pat' to generate tokens"
+	exit 1
+fi
+
+GITHUB_PAT=$(cat runner-pat)
+TOKEN=$(
+curl    -sS \
+	-X POST \
+	-H "Accept: application/vnd.github+json" \
+	-H "Authorization: Bearer $GITHUB_PAT" \
+	-H "X-GitHub-Api-Version: 2026-03-10" \
+	https://api.github.com/repos/$OWNER/$REPO/actions/runners/registration-token | \
+sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+)
+
+echo "TOKEN: $TOKEN"
+
+mkdir -p "$LWORK" "$LCCACHE"
+sudo chown 1001:1001 -R "$LWORK" "$LCCACHE"
+
+docker run -it --name "$NAME" \
+	--detach \
+	-v /var/run/docker.sock:/var/run/docker.sock \
+	-v "$LWORKABS":"$RWORK" \
+	-v "$LCCACHEABS":"$RCCACHE" \
+	--ulimit nofile=65536:65536 \
+	--device /dev/kvm:/dev/kvm:rwm \
+	"$IMAGE" \
+	bash -c "./config.sh --url \"$RURL\" --name \"$NAME\" --unattended --token \"$TOKEN\" --replace && ./run.sh"

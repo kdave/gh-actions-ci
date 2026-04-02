@@ -1,0 +1,9 @@
+#!/bin/sh -x
+
+name=runner$1
+
+docker ps -a
+docker stop $name
+docker ps -a
+docker rm $name
+docker ps -a
