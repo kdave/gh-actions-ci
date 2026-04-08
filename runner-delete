@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Internal runner numeric id
+NAME="${1?}"
+OWNER="btrfs"
+REPO="linux"
+
+if ! [ -f "runner-pat" ]; then
+	echo "ERROR: cannot find the PAT file 'runner-pat' to generate tokens"
+	exit 1
+fi
+
+if [ -z "$1" ]; then
+	echo "ERROR: no worker number"
+	exit 1
+fi
+
+GITHUB_PAT=$(cat runner-pat)
+
+#echo $GITHUB_PAT
+
+output=$(
+curl	-L \
+	-X DELETE \
+	-H "Accept: application/vnd.github+json" \
+	-H "Authorization: Bearer $GITHUB_PAT" \
+	-H "X-GitHub-Api-Version: 2026-03-10" \
+	https://api.github.com/repos/$OWNER/$REPO/actions/runners/$NAME)
+
+echo RET $?
+echo "$output"
+
+if echo "$output" | grep 'status.*401'; then
+	echo "Expired token"
+	exit 1
+fi
+
+echo "$output" | \
+sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'

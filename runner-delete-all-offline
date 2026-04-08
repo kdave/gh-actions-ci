@@ -1,0 +1,6 @@
+#!/bin/sh
+
+./runner-list | grep -w 'offline' | while read name id status tmp; do
+	echo "$name $id $status"
+	./runner-delete "$id"
+done
