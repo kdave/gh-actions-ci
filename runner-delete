@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+## Delete a runner (requires internal id!)
 
 # Internal runner numeric id
 NAME="${1?}"
@@ -17,15 +18,13 @@ fi
 
 GITHUB_PAT=$(cat runner-pat)
 
-#echo $GITHUB_PAT
-
 output=$(
 curl	-L \
 	-X DELETE \
 	-H "Accept: application/vnd.github+json" \
 	-H "Authorization: Bearer $GITHUB_PAT" \
 	-H "X-GitHub-Api-Version: 2026-03-10" \
-	https://api.github.com/repos/$OWNER/$REPO/actions/runners/$NAME)
+	"https://api.github.com/repos/$OWNER/$REPO/actions/runners/$NAME")
 
 echo RET $?
 echo "$output"

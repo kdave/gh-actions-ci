@@ -1,4 +1,5 @@
 #!/bin/bash
+## Check docker setup (daemon, location, user)
 
 if rpm -q docker; then
 	echo "Package docker: installed"
